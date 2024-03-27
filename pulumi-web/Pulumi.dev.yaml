@@ -1,6 +1,0 @@
-config:
-  pulumi-web:image: nginx:alpine
-  pulumi-web:namespace: dev
-  pulumi-web:password:
-    secure: AAABADnueVGfTRCx7urgIsRlB7Gf4KxoYnX61pbt7EAyN+VezY3PwAC1
-  pulumi-web:replicas: "3"
