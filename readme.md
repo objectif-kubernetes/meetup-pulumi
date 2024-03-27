@@ -338,3 +338,158 @@ pulumi new kubernetes-typescript
 
 Traefik sera utilisé au niveau cluster et non au niveau namespace. Je considère que Traefik fera partie de mes ressources d'infrastructure et sera utilisé par plusieurs applications.
 
+Pour déployer Traefik, je vais utiliser le chart Helm de Traefik.
+
+```typescript
+const traefikHelm = new k8s.helm.v3.Release(
+		"traefikhelm",
+		{
+			chart: "traefik",
+			namespace: traefikNs.metadata.name,
+			repositoryOpts: {
+				repo: "https://helm.traefik.io/traefik",
+			},
+			values: traefikValues,
+		},
+		{
+			provider: k8sProvider,
+			dependsOn: [traefikNs], // Le déploiement Helm dépend du Namespace
+			customTimeouts: { create: "5m" }, // On rajoute un timeout de 5 minutes pour que le loadbalancer soit créé
+		}
+	);
+```
+
+J'utilise un fichier de configuration sité dans le répertoire `helm-values` pour définir les valeurs du chart Helm de Traefik. Je vous laisse vous reporter au contenu du fichier et à l'aide de Traefik pour comprendre les valeurs.
+
+Le code est très simple à comprendre à part la partie d'attente de la création du loadbalancer. En effet, le loadbalancer de Traefik peut prendre un certain temps à être créé. Pour cela, j'ai ajouté un timeout de 5 minutes pour attendre la création du loadbalancer.
+
+Et pour récupérer l'adresse IP de sortie de notre loadbalancer, je vais utiliser la sortie de Pulumi.
+
+```typescript
+const service = pulumi.all([traefikHelm.name, traefikHelm.id]).apply((e) => {
+	const serviceName = `${e[0]}`;
+	return Service.get(
+		serviceName,
+		interpolate`${traefikNs.metadata.name}/${serviceName}`,
+		{
+			provider: k8sProvider,
+			dependsOn: [traefikNs],
+		}
+	);
+});
+
+```
+
+Dans le fichier `index.ts`, j'ai ajouté une sortie pour récupérer le nom du cluster K8S et l'adresse IP du loadbalancer. Ces sorties serviront à configurer les applications qui tourneront sur le cluster.
+
+et bien sûr on déploie le projet :
+
+```bash
+pulumi up
+```
+
+Et voilà, Traefik est déployé sur le cluster K8S et vous avez l'adresse IP du loadbalancer.
+
+## Exemple: déploiement d'une application web sur un cluster K8S
+
+Pour l'exemple, je vais déployer une application web sur un cluster K8S en utilisant Pulumi. L'application web sera un simple serveur whoami qui renvoie des informations sur le serveur. J'ai fait pointer les noms de domaine de l'application web (prod et dev) sur le loadbalancer de Traefik.
+
+Pour ce faire, je vais créer un nouveau projet Pulumi et initialiser le projet avec le template Kubernetes TypeScript.
+
+```bash
+mkdir pulumi-app
+cd pulumi-app
+pulumi new kubernetes-typescript
+```
+
+Plusieurs choses à remarquer dans ce nouveau projet
+
+### Les StackReferences
+
+J'utilise les `StackReferences` pour référencer les ressources de mon projet Traefik. Cela me permet de récupérer le nom du cluster K8S et l'adresse IP du loadbalancer pour configurer mon application web.
+
+```typescript
+// Récupération du nom du cluster K8S
+const traefikReference = new pulumi.StackReference(
+	"mikaelmorvan-meetup/pulumi-traefik/dev"
+);
+```
+
+Le nom de la `StackReference` est `mikaelmorvan-meetup/pulumi-traefik/dev`. Cela signifie que je fais référence au projet `pulumi-traefik` de la Stack `dev` pour le user `mikaelmorvan-meetup`. Il n'y a à ma connaissance pas moyen de lister les `StackReferences` disponibles. Il faut donc connaître le nom de la `StackReference` pour l'utiliser.
+
+### La notions de dependOn
+
+J'utilise la notion de `dependOn` pour définir une dépendance entre les ressources. Cela permet de définir l'ordre de création des ressources.
+
+```typescript
+// Crée un service pour le déploiement whoami
+const whoamiService = new Service(
+	"whoami-service",
+	{
+		metadata: {
+			name: "whoami-service",
+		},
+		spec: {
+			selector: whoamiDeployment.spec.template.metadata.labels,
+			ports: [{ port: 80, targetPort: 80 }],
+		},
+	},
+	{ provider: provider }
+);
+
+// Crée une route pour le service whoami
+// C'est une custom resource Kubernetes de type IngressRoute
+new kubernetes.apiextensions.CustomResource(
+	`whoami-ingress-route`,
+	{
+		apiVersion: "traefik.containo.us/v1alpha1",
+		kind: "IngressRoute",
+		spec: {
+			entryPoints: ["websecure"],
+			routes: [
+				{
+					match: `Host(\`${config.require("domain-name")}\`)`,
+					kind: "Rule",
+					services: [
+						{
+							name: "whoami-service",
+							port: 80,
+						},
+					],
+				},
+			],
+			tls: {
+				certResolver: "letsencrypt",
+			},
+		},
+	},
+	{ provider: provider, dependsOn: [whoamiService] }
+);
+```
+
+Dans le code ci-dessus, je crée un service pour le déploiement whoami et une route pour le service whoami. La route est une custom resource Kubernetes de type IngressRoute. La route dépend du service whoami pour être créée.
+
+J'ai créé deux environnements pour le projet `pulumi-app` : `dev` et `prod`. 
+J'ai créé trois variables pour chaque environnement : `domain-name`, `replicas` et `namespace`. Ces variables sont utilisées pour configurer l'application web et notamment pour définir le nom de domaine, le nombre de réplicas et le namespace de déploiement.
+
+J'ai déployé l'application web sur les deux environnements.
+
+```bash
+pulumi stack select dev
+pulumi up --yes
+pulumi stack select prod
+pulumi up --yes
+```
+
+Et voilà, l'application web est déployée sur le cluster K8S et vous pouvez y accéder via le nom de domaine que vous avez défini.
+
+## Conclusion
+
+En quelques lignes de code, nous avons déployé une application sur deux environnements différents. Nous avons une application web qui tourne sur un cluster K8S et qui est accessible via un loadbalancer. Nous avons utilisé Pulumi pour gérer l'infrastructure en tant que code et pour déployer les ressources sur le cluster K8S.
+
+Pulumi est un outil puissant pour gérer l'infrastructure en tant que code. Il permet de déployer des ressources sur différents fournisseurs de cloud en utilisant un seul langage de programmation. Pulumi est facile à prendre en main et permet de gérer les environnements de déploiement de manière efficace.
+
+Ce que je n'ai pas abordé dans ce meetup, c'est la notion de droits d'accès et de sécurité. Pulumi permet de gérer les droits d'accès et les secrets de manière sécurisée. Vous pouvez définir des rôles d'accès pour les utilisateurs et les groupes.
+
+Une nouveauté de Pulumi que je n'ai pas abordée également est la partie ESC (Environments, Secrets, and Configuration). Pulumi a introduit une nouvelle fonctionnalité qui permet de gérer les environnements, les secrets et la configuration de manière plus efficace. Vous pouvez définir des environnements de déploiement, des secrets et des configurations pour chaque environnement.
+

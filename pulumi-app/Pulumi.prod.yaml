@@ -1,0 +1,4 @@
+config:
+  pulumi-app:nanespace: prod
+  pulumi-app:replicas: 3
+  pulumi-app:domain-name: meetup-pulumi.objectif-kubernetes.fr

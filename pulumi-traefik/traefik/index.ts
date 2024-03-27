@@ -1,5 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
-import * as kubernetes from "@pulumi/kubernetes";
+import * as k8s from "@pulumi/kubernetes";
 import { load } from "js-yaml";
 import { readFileSync } from "fs";
 import { Output, interpolate } from "@pulumi/pulumi";
@@ -8,12 +8,12 @@ import { Service } from "@pulumi/kubernetes/core/v1/service";
 // Emplacement du fichier de configuration Traefik
 const TRAEFIK_CONF = "helm-values/traefik.default.yml";
 
-export const createTraefik = (k8sProvider: kubernetes.Provider) => {
+export const createTraefik = (k8sProvider: k8s.Provider) => {
 	const config = new pulumi.Config();
 	const traefikNamespace = config.get("traefikNamespace") || "traefik";
 
 	// Création d'un Namespace Kubernetes en utilisant la classe Namespace de Pulumi
-	const traefikNs = new kubernetes.core.v1.Namespace(
+	const traefikNs = new k8s.core.v1.Namespace(
 		"traefikns",
 		{
 			metadata: {
@@ -30,7 +30,7 @@ export const createTraefik = (k8sProvider: kubernetes.Provider) => {
 		readFileSync(TRAEFIK_CONF, { encoding: "utf-8" })
 	) as Output<string>;
 
-	const traefikHelm = new kubernetes.helm.v3.Release(
+	const traefikHelm = new k8s.helm.v3.Release(
 		"traefikhelm",
 		{
 			chart: "traefik",
