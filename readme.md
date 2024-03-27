@@ -304,6 +304,37 @@ nb: le flag `--yes` permet de ne pas demander de confirmation pour le déploieme
 
 Vous pouvez constater que les deux environnements sont déployés sur le cluster K8S et que les ressources sont isolées dans des namespaces différents.
 
+## Pulumi et la gestion multi-projets
 
+Quand un projet grandit et que vous avez plusieurs fonctionnalités différentes à gérer (par exemple, une application web, une application mobile, une API, etc.), vous pouvez utiliser la gestion multi-projets de Pulumi. Pulumi appelle cela des [micro-stacks](https://www.pulumi.com/docs/using-pulumi/organizing-projects-stacks/).
 
+Pour ma part, j'utilise les micro-stacks pour séparer la partie infrastructure de mes projets de la partie applicative. Cela me permet de gérer les ressources d'infrastructure de manière indépendante de l'application.
+La séparation que je fais entre la partie infrastructure et la partie applicative est basée sur le cycle de vie des différents composants. Les ressources d'infrastructure ont un cycle de vie plus long que les ressources applicatives. Par exemple, un cluster K8S peut être utilisé par plusieurs applications, donc il a un cycle de vie plus long que les applications qui tournent sur ce cluster.
+
+Le problème de la gestion multi-projets est que Pulumi isole les projets entre eux. Cela signifie que vous ne pouvez pas partager des ressources entre les projets. Pour résoudre ce problème, vous pouvez utiliser les `StackReferences` de Pulumi.
+
+Les `StackReferences` vous permettent de référencer des ressources d'un projet à un autre. Vous pouvez utiliser les `StackReferences` pour partager des ressources entre les projets.
+
+Pour créer un `StackReference`, vous pouvez utiliser le code suivant :
+
+```typescript
+import * as pulumi from "@pulumi/pulumi";
+
+const infra = new pulumi.StackReference("infra");
+```
+Grace aux StackRefences, vous pouvez avoir accès à toutes les ressources (en output) du projet `infra` dans le projet courant.
+
+## Exemple: déploiement de Traefik sur un cluster K8S
+
+Pour l'exemple, je vais déployer Traefik sur un cluster K8S en utilisant Pulumi. Traefik est un reverse proxy et un load balancer qui peut être utilisé pour gérer le trafic réseau sur un cluster K8S.
+
+Pour ce faire, je vais créer un nouveau projet Pulumi et initialiser le projet avec le template Kubernetes TypeScript.
+
+```bash
+mkdir pulumi-traefik
+cd pulumi-traefik
+pulumi new kubernetes-typescript
+```
+
+Traefik sera utilisé au niveau cluster et non au niveau namespace. Je considère que Traefik fera partie de mes ressources d'infrastructure et sera utilisé par plusieurs applications.
 

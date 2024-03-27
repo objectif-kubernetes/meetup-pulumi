@@ -1,0 +1,30 @@
+ingressRoute:
+  dashboard:
+    enabled: true
+
+persistence:
+  name: data
+  enabled: true
+  path: /data
+  size: 1Gi
+  annotations: { 'pv.beta.kubernetes.io/gid': '65532' }
+
+podSecurityContext:
+  fsGroup: 65532
+
+certResolvers:
+  letsencrypt:
+    # for challenge options cf. https://doc.traefik.io/traefik/https/acme/
+    email: mikaelmorvan@gmail.com
+    tlsChallenge: true
+    httpChallenge:
+      entryPoint: 'web'
+    # It has to match the path with a persistent volume
+    storage: /data/acme.json
+
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
+    filePath: '/data/traefik/access.log'

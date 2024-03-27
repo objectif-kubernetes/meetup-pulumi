@@ -1,0 +1,13 @@
+{
+    "name": "pulumi-traefik",
+    "main": "index.ts",
+    "devDependencies": {
+        "@types/node": "^18"
+    },
+    "dependencies": {
+        "@pulumi/kubernetes": "^4.0.0",
+        "@pulumi/pulumi": "^3.0.0",
+        "@types/js-yaml": "^4.0.9",
+        "js-yaml": "^4.1.0"
+    }
+}

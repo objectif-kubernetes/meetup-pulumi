@@ -1,0 +1,2 @@
+config:
+  pulumi-traefik:k8sCluster: k8s-meetup-pulumi
