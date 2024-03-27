@@ -1,0 +1,4 @@
+config:
+  pulumi-web:image: nginx:alpine
+  pulumi-web:namespace: prod
+  pulumi-web:replicas: "3"
